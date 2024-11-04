@@ -11,11 +11,11 @@
 #include <opm/simulators/linalg/PropertyTree.hpp>
 #pragma GCC push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#include <opm/simulators/linalg/cuistl/CuSeqILU0.hpp>
-#include <opm/simulators/linalg/cuistl/CuVector.hpp>
-#include <opm/simulators/linalg/cuistl/PreconditionerAdapter.hpp>
+#include <opm/simulators/linalg/gpuistl/GpuSeqILU0.hpp>
+#include <opm/simulators/linalg/gpuistl/GpuVector.hpp>
+#include <opm/simulators/linalg/gpuistl/PreconditionerAdapter.hpp>
 #pragma GCC pop
-#include <opm/simulators/linalg/cuistl/detail/cuda_safe_call.hpp>
+#include <opm/simulators/linalg/gpuistl/detail/gpu_safe_call.hpp>
 #include <opm/simulators/linalg/ilufirstelement.hh>
 #include <opm/simulators/linalg/matrixblock.hh>
 
@@ -108,7 +108,7 @@ readAndSolveCPU(const auto jsonConfigCPUFilename,
     using M = Opm::MatrixBlock<T, dim, dim>;
     using SpMatrix = Dune::BCRSMatrix<M>;
     using Vector = Dune::BlockVector<Dune::FieldVector<T, dim>>;
-    using CuILU0 = Opm::cuistl::CuSeqILU0<SpMatrix, Opm::cuistl::CuVector<T>, Opm::cuistl::CuVector<T>>;
+    using CuILU0 = Opm::gpuistl::GpuSeqILU0<SpMatrix, Opm::gpuistl::GpuVector<T>, Opm::gpuistl::GpuVector<T>>;
     using Operator = Dune::MatrixAdapter<SpMatrix, Vector, Vector>;
     using PrecFactory = Opm::PreconditionerFactory<Operator, Dune::Amg::SequentialInformation>;
 
@@ -161,8 +161,8 @@ readAndSolveGPU(const auto jsonConfigGPUFilename,
     using M = Opm::MatrixBlock<T, dim, dim>;
     using SpMatrix = Dune::BCRSMatrix<M>;
     using Vector = Dune::BlockVector<Dune::FieldVector<T, dim>>;
-    using CuILU0 = Opm::cuistl::CuSeqILU0<SpMatrix, Opm::cuistl::CuVector<T>, Opm::cuistl::CuVector<T>>;
-    using GPUVector = Opm::cuistl::CuVector<T>;
+    using CuILU0 = Opm::gpuistl::GpuSeqILU0<SpMatrix, Opm::gpuistl::GpuVector<T>, Opm::gpuistl::GpuVector<T>>;
+    using GPUVector = Opm::gpuistl::GpuVector<T>;
     using Operator = Dune::MatrixAdapter<SpMatrix, Vector, Vector>;
     using PrecFactory = Opm::PreconditionerFactory<Operator, Dune::Amg::SequentialInformation>;
 
@@ -185,24 +185,24 @@ readAndSolveGPU(const auto jsonConfigGPUFilename,
 
     Dune::InverseOperatorResult result;
 
-    auto BonGPU = Opm::cuistl::CuSparseMatrix<T>::fromMatrix(B);
+    auto BonGPU = Opm::gpuistl::GpuSparseMatrix<T>::fromMatrix(B);
     auto BOperator = std::make_shared<
-        Dune::MatrixAdapter<Opm::cuistl::CuSparseMatrix<T>, Opm::cuistl::CuVector<T>, Opm::cuistl::CuVector<T>>>(
+        Dune::MatrixAdapter<Opm::gpuistl::GpuSparseMatrix<T>, Opm::gpuistl::GpuVector<T>, Opm::gpuistl::GpuVector<T>>>(
         BonGPU);
 
     auto precGPUWrapped = PrecFactory::create(*BCPUOperator, configurationGPU.get_child("preconditioner"), wc, 1);
 
     auto precAsHolder = std::dynamic_pointer_cast<
-        Opm::cuistl::PreconditionerHolder<Opm::cuistl::CuVector<T>, Opm::cuistl::CuVector<T>>>(precGPUWrapped);
+        Opm::gpuistl::PreconditionerHolder<Opm::gpuistl::GpuVector<T>, Opm::gpuistl::GpuVector<T>>>(precGPUWrapped);
     if (!precAsHolder) {
         OPM_THROW(std::invalid_argument,
                   "The preconditioner needs to be a CUDA preconditioner wrapped in a "
-                  "Opm::cuistl::PreconditionerHolder (eg. CuILU0).");
+                  "Opm::gpuistl::PreconditionerHolder (eg. CuILU0).");
     }
     auto preconditionerOnGPU = precAsHolder->getUnderlyingPreconditioner();
 
-    auto scalarProduct = std::make_shared<Dune::SeqScalarProduct<Opm::cuistl::CuVector<T>>>();
-    auto solver = Solver<Opm::cuistl::CuVector<T>>(BOperator,
+    auto scalarProduct = std::make_shared<Dune::SeqScalarProduct<Opm::gpuistl::GpuVector<T>>>();
+    auto solver = Solver<Opm::gpuistl::GpuVector<T>>(BOperator,
                                                    scalarProduct,
                                                    preconditionerOnGPU,
                                                    configurationGPU.get<double>("tol"),
@@ -225,7 +225,7 @@ readAndSolveGPU(const auto jsonConfigGPUFilename,
         gpufailed = true;
     }
 
-    OPM_CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    OPM_GPU_SAFE_CALL(cudaDeviceSynchronize());
     auto gpuEnd = std::chrono::high_resolution_clock::now();
 
     const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(gpuEnd - gpuStart);
