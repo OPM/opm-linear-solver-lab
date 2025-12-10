@@ -1,0 +1,7 @@
+//**************************************************************************
+//* Copyright (c) 2025, Advanced Micro Devices, Inc. All rights reserved.
+//**************************************************************************
+
+#pragma once
+
+void preconditioner(solver_data *bsr);

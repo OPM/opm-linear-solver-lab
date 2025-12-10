@@ -1,0 +1,2 @@
+pmc: FETCH_SIZE WRITE_SIZE VALUUtilization TCP_PENDING_STALL_CYCLES_sum
+pmc :L2CacheHit
